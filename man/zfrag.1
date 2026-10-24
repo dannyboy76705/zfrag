@@ -112,7 +112,7 @@ No summary.
 Pads an older archive to a multiple of 4096 bytes so that it can sit whole on a loop device, by appending a padding frame and a copy of the trailer. Nothing is recompressed or rewritten. pack pads new archives already.
 .PP
 .SS mount
-Mounts the archive read\-only as a directory tree; unmount with fusermount3 \-u MOUNTPOINT. Needs libfuse3. Only archives made by zfrag pack can be mounted. A split archive mounts as one; every part must be present.
+Mounts the archive read\-only as a directory tree; unmount with fusermount3 \-u MOUNTPOINT. Needs libfuse3. Only archives made by zfrag pack can be mounted. A split archive mounts as one: name the archive or any one part, with every part beside it. Parts that sit on different discs can be linked into one directory first (see EXAMPLES).
 .PP
 If the archive holds a cdcstore repository (cdcstore.idx and chunks/), the mount has two halves, served from the same process and frame cache: MOUNTPOINT/native is the archive's own files and MOUNTPOINT/virtual is the files the repository holds. An mjpegstore set (specs.txt and a folder of JPEG pictures per clip) gets the same two halves, with virtual holding one CLIP.mkv per clip: the stream mjpegstore \-s writes, readable at any offset. Files stored with \-\-assets appear in native/assets.
 .PP
@@ -180,6 +180,14 @@ zfrag extract \-C out set.tar.zfrag game2/
 zfrag verify set.tar.zfrag
 zfrag mount set.tar.zfrag /mnt/set
 fusermount3 \-u /mnt/set
+
+mkdir ~/set
+ln \-s /media/disc1/set.tar.zfrag.001 /media/disc2/set.tar.zfrag.002 ~/set/
+zfrag mount ~/set/set.tar.zfrag /mnt/set
+
+# or copy the parts to one folder on disk instead of linking them
+cp /media/disc1/set.tar.zfrag.001 /media/disc2/set.tar.zfrag.002 ~/set/
+zfrag mount ~/set/set.tar.zfrag /mnt/set
 
 cdcstore\-list \-k REPO | sortof\-cdcsort \- > list.txt
 zfrag pack \-T list.txt \-o set.tar.zfrag \-\-level 9 \-\-frame 8M

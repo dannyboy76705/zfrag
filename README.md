@@ -217,6 +217,26 @@ or any one part, with the parts beside it. To mount, copy the parts back or link
 one working directory. The tools only check that all parts are present (a missing one is named, with a
 reminder that its disc may not be mounted); what each disc holds is up to you.
 
+For example, with three discs, each holding one part, mounted at `/media/disc1`, `/media/disc2` and `/media/disc3`:
+
+```
+mkdir ~/set
+ln -s /media/disc1/set.tar.zfrag.001 /media/disc2/set.tar.zfrag.002 /media/disc3/set.tar.zfrag.003 ~/set/
+zfrag mount ~/set/set.tar.zfrag /mnt/set       # or name any one part: ~/set/set.tar.zfrag.002
+fusermount3 -u /mnt/set
+```
+
+Or, with the parts copied to one folder on disk (needs room for the whole archive, but the discs can be put away):
+
+```
+mkdir ~/set
+cp /media/disc1/set.tar.zfrag.001 /media/disc2/set.tar.zfrag.002 /media/disc3/set.tar.zfrag.003 ~/set/
+zfrag mount ~/set/set.tar.zfrag /mnt/set
+fusermount3 -u /mnt/set
+```
+
+The mount message lists the parts it found ("3 parts, set.tar.zfrag.001 .. set.tar.zfrag.003"). Every part must be present while it is mounted, so all the discs stay in their drives, or are copied to disk, for as long as you use it; a missing part is named in the error.
+
 A part larger than 4 GiB (4300M is 4.2 GiB) needs a disc format that allows files that large: UDF, or
 ISO 9660 level 3. Plain ISO 9660 stops just under 4 GiB; use a smaller `--split` for that, such as 4000M.
 
