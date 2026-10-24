@@ -1,0 +1,200 @@
+.TH ZFRAG 1 "October 2026" "zfrag" "User Commands"
+.SH NAME
+zfrag \- pack files into a small, seekable, mountable .tar.zfrag archive
+.SH SYNOPSIS
+.B zfrag
+.I command
+[options]
+.br
+.B zfrag pack \-T LIST \-o ARCHIVE [options]
+.br
+.B zfrag cat ARCHIVE
+.br
+.B zfrag ls ARCHIVE
+.br
+.B zfrag extract [\-C DIR] [\-q] ARCHIVE [PATH...]
+.br
+.B zfrag verify [\-T LIST [\-C DIR] [\-\-strip\-components N]] [\-q] ARCHIVE
+.br
+.B zfrag split \-\-size SIZE [\-d DIR] [\-\-force] [\-q] ARCHIVE
+.br
+.B zfrag pad [\-q] ARCHIVE
+.br
+.B zfrag mount [\-f] [\-d] [\-s] [\-o OPTIONS] ARCHIVE MOUNTPOINT
+.br
+.B zfrag packtest \-T LIST [options]
+.SH DESCRIPTION
+zfrag packs a large, mostly\-read data set into one file that is small, can be read from the middle, and can be mounted. An archive is a tar stream cut into independent zstd frames, followed by an index, so a reader decodes only the frames a file lives in. Archives are named NAME.tar.zfrag. They can be read without zfrag: tar \-xf, unzstd \-c | tar \-x and zstd \-d \-o work on them.
+.PP
+pack stores exactly the files in a list, in the order written, and nothing else. A list is one path per line. Which files, and in which order, is your choice, and the order matters for compression, because similar files near each other compress better. The sortof\-suite tools make lists.
+.PP
+An archive in parts (made with pack \-\-split or zfrag split) is read as one archive by every command: give its normal name (ARCHIVE.tar.zfrag) or any part (ARCHIVE.tar.zfrag.002) with the parts beside it.
+.PP
+zfrag does not make lists itself. Without the sortof\-suite, find DIR \-type f | sort \-V > list.txt gives a natural order.
+.PP
+.SH COMMANDS
+.SS pack
+Writes an archive of exactly the files in a list. The name must end in .tar.zfrag. It is written under a temporary name and renamed when complete, so a failed run leaves nothing behind. Only regular files are stored; anything else in the list is skipped with a message, and the exit status is 1.
+.PP
+.TP
+.B \-T LIST
+The files to pack, one path per line (required).
+.TP
+.B \-o ARCHIVE
+The archive to write (required).
+.TP
+.B \-\-split SIZE
+Write the archive as parts of at most SIZE (K, M, G or T: 4300M, 4G) named ARCHIVE.001, ARCHIVE.002 and so on, for discs or small drives. Parts end between frames, and joining them with cat gives the same bytes a single file would hold.
+.TP
+.B \-C DIR
+Paths in LIST are relative to DIR (stored names are as listed).
+.TP
+.B \-\-strip\-components N
+Remove the first N path components from every stored name, like tar. The files are still read from the paths in LIST. With list paths dir/game1/... and N=1 the archive stores game1/..., and a mount at dir puts every file back at dir/game1/.... Two paths that become the same name are reported.
+.TP
+.B \-\-assets DIR
+Also store the files directly in DIR (audio, subtitles, cover art and so on; no dot files, nothing below it) as assets/NAME, after everything in LIST, whatever DIR is called on disk. A mount shows assets/ under native/. Relative to \-C.
+.TP
+.B \-0
+LIST is NUL\-separated.
+.TP
+.B \-\-level N
+zstd level (default 19).
+.TP
+.B \-\-frame SIZE
+Uncompressed bytes per frame, 64K to 32M (default 32M): the unit a reader decodes to read any part of a file. Bigger frames compress better and are harder to seek in: 32M suits an archive that is stored, 16M or smaller one that is played from.
+.TP
+.B \-j N
+Frames compressed at a time (default 4). The archive is the same for any N.
+.TP
+.B \-\-no\-pad
+Do not pad the archive to a multiple of 4096 bytes. By default it is padded, because a loop device drops a partial last sector, which would cut the trailer off.
+.TP
+.B \-\-force
+Overwrite ARCHIVE if it exists.
+.TP
+.B \-q
+No progress and no summary.
+.SS cat
+Writes the archive's tar stream to standard output.
+.PP
+.SS ls
+Lists every file in the archive with its size.
+.PP
+.SS extract
+Extracts some or all files, decoding only the frames they are in. PATH is a file name in the archive, or a directory prefix ending in /. With no PATH everything is extracted.
+.PP
+.TP
+.B \-C DIR
+Extract under DIR.
+.TP
+.B \-q
+Quiet.
+.SS verify
+Checks the index and that every frame decodes with the right size and checksum. With \-T LIST it also compares each listed file on disk (paths relative to \-C DIR, with \-\-strip\-components applied) with the archive's copy.
+.PP
+.SS split
+Cuts an existing archive into numbered parts without recompressing it. Parts end between frames, so a part can be up to one frame short of SIZE. ARCHIVE is left in place; cat ARCHIVE.0* gives back the original.
+.PP
+.TP
+.B \-\-size SIZE
+The most a part may hold: 4300M, 4G and so on (required).
+.TP
+.B \-d DIR
+Write the parts into DIR (default: beside ARCHIVE).
+.TP
+.B \-\-force
+Replace parts of the same name that already exist.
+.TP
+.B \-q
+No summary.
+.SS pad
+Pads an older archive to a multiple of 4096 bytes so that it can sit whole on a loop device, by appending a padding frame and a copy of the trailer. Nothing is recompressed or rewritten. pack pads new archives already.
+.PP
+.SS mount
+Mounts the archive read\-only as a directory tree; unmount with fusermount3 \-u MOUNTPOINT. Needs libfuse3. Only archives made by zfrag pack can be mounted. A split archive mounts as one; every part must be present.
+.PP
+If the archive holds a cdcstore repository (cdcstore.idx and chunks/), the mount has two halves, served from the same process and frame cache: MOUNTPOINT/native is the archive's own files and MOUNTPOINT/virtual is the files the repository holds. An mjpegstore set (specs.txt and a folder of JPEG pictures per clip) gets the same two halves, with virtual holding one CLIP.mkv per clip: the stream mjpegstore \-s writes, readable at any offset. Files stored with \-\-assets appear in native/assets.
+.PP
+.TP
+.B \-f
+Stay in the foreground.
+.TP
+.B \-d
+Debug output (implies \-f).
+.TP
+.B \-s
+Single\-threaded.
+.TP
+.B \-o threads=N
+Frames decoded at once, 1 to 64 (default: two per CPU, at most 16). Each decoding thread needs one frame\-sized buffer, so decoding memory follows the CPUs.
+.TP
+.B \-o cache=MIB
+Decoded data kept in memory (default: one frame per thread, at least 4 frames). A larger cache helps random access and several readers.
+.TP
+.B \-o OPTION
+Anything else is passed to libfuse (allow_other and so on).
+.SS packtest
+Measures compression ratio and decode speed per frame size for your own data, before you pack.
+.PP
+.TP
+.B \-T LIST
+File list, one path per line (required).
+.TP
+.B \-0
+LIST is NUL\-separated.
+.TP
+.B \-C DIR
+Prefix every path in LIST with DIR/.
+.TP
+.B \-\-level N
+zstd level (default 19).
+.TP
+.B \-\-frames A,B,...
+Frame sizes to test (default 1M,4M,16M; 64K to 32M).
+.TP
+.B \-j N
+Compress N frames at a time (default 1).
+.TP
+.B \-\-limit SIZE
+Stop after SIZE bytes of input per frame size, for a quick sample of the start of the list.
+.TP
+.B \-\-sample
+Feed a sample to the compressor instead of everything: the first WINDOW of every EVERY (default 2 s of every 20 s, 10%).
+.TP
+.B \-\-window X, \-\-every X
+Sample window and period, in seconds (2 or 2s) or files (48f).
+.TP
+.B \-\-specs FILE, \-\-fps N
+The frame rate for \-\-sample.
+.TP
+.B \-q
+No progress output.
+.SH EXAMPLES
+.nf
+.RS
+sortof\-natural /path/to/source > list.txt
+zfrag pack \-T list.txt \-o set.tar.zfrag
+zfrag ls set.tar.zfrag
+zfrag extract \-C out set.tar.zfrag game2/
+zfrag verify set.tar.zfrag
+zfrag mount set.tar.zfrag /mnt/set
+fusermount3 \-u /mnt/set
+
+cdcstore\-list \-k REPO | sortof\-cdcsort \- > list.txt
+zfrag pack \-T list.txt \-o set.tar.zfrag \-\-level 9 \-\-frame 8M
+zfrag pack \-T list.txt \-o set.tar.zfrag \-\-strip\-components 1 \-\-assets ~/ep1\-extras
+.RE
+.fi
+.SH EXIT STATUS
+0 on success. 1 if a command fails or finds a problem: an archive that cannot be read, a file that differs, entries that were skipped. 2 on a usage error.
+.SH AUTHOR
+Daniel Lee Witzel. MIT license (see the LICENSE file shipped with the source).
+.SH SEE ALSO
+.BR sortof\-natural (1),
+.BR sortof\-cdcsort (1),
+.BR sortof\-palscore (1),
+.BR cdcstore (7),
+.BR mjpegstore (1),
+.BR mjpegmount (1),
+.BR fusermount3 (1)

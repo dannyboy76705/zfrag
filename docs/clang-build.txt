@@ -1,0 +1,23 @@
+# Building zfrag with clang
+
+CFLAGS="-O3 -march=native -flto=thin" CC="clang"  LDFLAGS="-flto=thin" make
+
+# The same thing through the Makefile's own variables (this keeps its default -g):
+#   make CC=clang OPT="-O3 -march=native -flto=thin" LDFLAGS=-flto=thin
+# and the plain clang build is:
+#   make CC=clang
+#
+# Notes
+#  * The Makefile adds the flags it needs (-I, -pthread, -Wall and the -std options) itself, so
+#    setting CFLAGS cannot remove them.
+#  * Run `make clean` first if the tree was built before with another compiler or other flags:
+#    the Makefile does not rebuild an object just because the flags changed.
+#  * -march=native builds for the CPU of the machine running make. A binary built on a newer
+#    machine can use instructions an older CPU does not have and stop with "illegal instruction"
+#    there (an A4-1250, say). Build on the machine that will run it, or pick something
+#    portable such as -march=x86-64-v2.
+#  * If the link step fails with a complaint about LTO, plugins or bitcode objects, add
+#    -fuse-ld=lld to LDFLAGS (and install lld).
+#  * Most of the time goes into libzstd and libxxhash, which are built separately, so these flags
+#    change zfrag's own code (list handling, tar headers, the mount) and
+#    may change little. `zfrag packtest` measures speed if you want to check.
